@@ -1,5 +1,6 @@
 export type TaskStatus = 'not_started' | 'in_progress' | 'blocked' | 'completed';
 export type TaskPriority = 'P0' | 'P1' | 'P2';
+export type TaskType = 'task' | 'milestone';
 
 export interface Task {
   id: string;
@@ -10,7 +11,7 @@ export interface Task {
   tags: string[];
   startDate: string;
   endDate: string;
-  isMilestone: boolean;
+  type: TaskType;
   baselineStart?: string;
   baselineEnd?: string;
   dependencyIds: string[];
@@ -59,9 +60,57 @@ export interface FilterState {
   search: string;
 }
 
+export type ValidationSeverity = 'error' | 'warning' | 'info';
+
+export interface ValidationFix {
+  label: string;
+  action: 'shiftWeekendMilestone';
+  payload?: Record<string, unknown>;
+}
+
 export interface ValidationIssue {
+  code: 'T001' | 'T002' | 'B001' | string;
   taskId: string;
-  field: keyof Task | 'dependency';
+  field: keyof Task | 'dependency' | 'budget';
   message: string;
-  severity: 'error' | 'warning';
+  severity: ValidationSeverity;
+  fix?: ValidationFix;
+}
+
+export type UsageSource = 'manual' | 'copilot' | 'api';
+export type UsageUnit = 'hour' | 'point' | 'currency';
+
+export interface UsageLog {
+  id: string;
+  taskId: string | null;
+  taskName?: string;
+  date: string;
+  spent: number;
+  unit: UsageUnit;
+  source: UsageSource;
+  cost?: number;
+  currency?: string;
+  note?: string;
+  createdAt: string;
+}
+
+export interface UsageSummary {
+  total: number;
+  byTask: Record<
+    string,
+    {
+      taskId: string | null;
+      taskName: string;
+      spent: number;
+      cost?: number;
+    }
+  >;
+  bySource: Record<UsageSource, number>;
+}
+
+export interface PersistedProjectData {
+  tasks: Task[];
+  settings: ProjectSettings;
+  usageLogs: UsageLog[];
+  updatedAt: string;
 }

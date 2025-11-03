@@ -11,7 +11,7 @@ export const DashboardView = ({ tasks }: Props) => {
   const milestones = useMemo(
     () =>
       tasks
-        .filter((task) => task.isMilestone)
+        .filter((task) => task.type === 'milestone')
         .sort((a, b) => a.startDate.localeCompare(b.startDate))
         .slice(0, 5),
     [tasks]
@@ -34,31 +34,31 @@ export const DashboardView = ({ tasks }: Props) => {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <MetricCard
           icon={<Clock className="h-5 w-5 text-primary" />}
-          title="正在进行"
+          title="进行中"
           value={`${tasks.filter((task) => task.status === 'in_progress').length} 项`}
-          description="包括进行中与本周新开启的任务"
+          description="统计当前仍在推进的任务数量"
         />
         <MetricCard
           icon={<Target className="h-5 w-5 text-purple-600" />}
           title="里程碑"
           value={`${milestones.length} / ${tasks.length}`}
-          description="里程碑完成情况概览"
+          description="即将到来的前 5 个里程碑"
         />
         <MetricCard
-          icon={<AlertTriangle className="h-5 w-5 text-warning" />}
+          icon={<AlertTriangle className="h-5 w-5 text-amber-500" />}
           title="阻塞"
           value={`${blocked.length} 项`}
-          description="需尽快解决的阻塞任务"
+          description="需要重点关注的阻塞项"
         />
         <MetricCard
-          icon={<BarChart3 className="h-5 w-5 text-success" />}
-          title="API 燃尽比"
+          icon={<BarChart3 className="h-5 w-5 text-emerald-600" />}
+          title="API 消耗率"
           value={`${(burnRate * 100).toFixed(0)}%`}
-          description={`预计 ${formatTokens(tasks.reduce((sum, item) => sum + item.apiActual, 0))}`}
+          description={`累计消耗 ${formatTokens(tasks.reduce((sum, item) => sum + item.apiActual, 0))}`}
         />
       </div>
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Panel title="里程碑到期" icon={<CheckCircle2 className="h-4 w-4 text-primary" />} className="lg:col-span-1">
+        <Panel title="里程碑跟踪" icon={<CheckCircle2 className="h-4 w-4 text-primary" />} className="lg:col-span-1">
           <ul className="space-y-3 text-sm">
             {milestones.map((task) => (
               <li key={task.id} className="rounded-md border border-slate-200 px-3 py-2">
@@ -66,34 +66,35 @@ export const DashboardView = ({ tasks }: Props) => {
                   <div className="font-semibold text-slate-700">{task.name}</div>
                   <span className="text-xs text-slate-400">{task.startDate}</span>
                 </div>
-                <div className="text-xs text-slate-500">负责人：{task.owner ?? '未分配'}</div>
+                <div className="text-xs text-slate-500">负责人：{task.owner ?? '未指定'}</div>
               </li>
             ))}
             {milestones.length === 0 && (
               <li className="rounded-md border border-dashed border-slate-200 px-3 py-8 text-center text-xs text-slate-400">
-                暂无里程碑，快去添加一个吧。
+                暂无里程碑，试着为关键节点建立里程碑。
               </li>
             )}
           </ul>
         </Panel>
-        <Panel title="风险提示" icon={<AlertTriangle className="h-4 w-4 text-warning" />} className="lg:col-span-1">
+        <Panel title="阻塞提醒" icon={<AlertTriangle className="h-4 w-4 text-amber-500" />} className="lg:col-span-1">
           <ul className="space-y-3 text-sm">
             {blocked.map((task) => (
-              <li key={task.id} className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
-                <div className="font-semibold text-warning">{task.name}</div>
-                <div className="text-xs text-warning">
-                  负责人：{task.owner ?? '未分配'} · 依赖：{task.dependencyIds.join(', ') || '无'}
+              <li key={task.id} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                <div className="font-semibold text-amber-600">{task.name}</div>
+                <div className="text-xs text-amber-600">
+                  负责人：{task.owner ?? '未指定'} · 依赖：
+                  {task.dependencyIds.length ? task.dependencyIds.join(', ') : '无'}
                 </div>
               </li>
             ))}
             {blocked.length === 0 && (
               <li className="rounded-md border border-dashed border-slate-200 px-3 py-8 text-center text-xs text-slate-400">
-                暂无阻塞，保持势头！
+                一切顺利，没有阻塞任务。
               </li>
             )}
           </ul>
         </Panel>
-        <Panel title="近期开启" icon={<Clock className="h-4 w-4 text-slate-400" />} className="lg:col-span-1">
+        <Panel title="即将开始" icon={<Clock className="h-4 w-4 text-slate-400" />} className="lg:col-span-1">
           <ul className="space-y-3 text-sm">
             {upcoming.map((task) => (
               <li key={task.id} className="rounded-md border border-slate-200 px-3 py-2">
@@ -106,7 +107,7 @@ export const DashboardView = ({ tasks }: Props) => {
             ))}
             {upcoming.length === 0 && (
               <li className="rounded-md border border-dashed border-slate-200 px-3 py-8 text-center text-xs text-slate-400">
-                本周没有新的任务排期。
+                暂无新的计划，请补充后续任务。
               </li>
             )}
           </ul>

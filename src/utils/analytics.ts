@@ -3,23 +3,13 @@ import {
   differenceInCalendarDays,
   eachDayOfInterval,
   formatISO,
-  isBefore,
-  isEqual,
-  isSaturday,
-  isSunday,
   parseISO,
   startOfDay
 } from 'date-fns';
-import type {
-  CostLine,
-  ProjectSettings,
-  Task,
-  ValidationIssue
-} from '../types';
+import type { CostLine, ProjectSettings, Task, UsageLog, ValidationIssue } from '../types';
+import { isWeekend, nextBusinessDay, todayIso } from './dates';
 
 const ensureDate = (value: string) => startOfDay(parseISO(value));
-
-const isWeekend = (date: Date) => isSaturday(date) || isSunday(date);
 
 export const generateSpanDates = (start: string, span: number) => {
   const dates: string[] = [];
@@ -30,193 +20,109 @@ export const generateSpanDates = (start: string, span: number) => {
   return dates;
 };
 
-const isDependencyValid = (tasks: Task[]) => {
-  const seen = new Set<string>();
-  const visit = (task: Task, stack: Set<string>): boolean => {
-    if (stack.has(task.id)) {
-      return false;
-    }
-    if (seen.has(task.id)) {
-      return true;
-    }
-    stack.add(task.id);
-    for (const depId of task.dependencyIds) {
-      const dep = tasks.find((t) => t.id === depId);
-      if (!dep) continue;
-      if (!visit(dep, stack)) {
-        return false;
-      }
-    }
-    stack.delete(task.id);
-    seen.add(task.id);
-    return true;
-  };
-  return tasks.every((task) => visit(task, new Set<string>()));
-};
-
-const collectDependencyCycles = (tasks: Task[]): ValidationIssue[] => {
-  const visited = new Set<string>();
-  const stack = new Set<string>();
-  const issues: ValidationIssue[] = [];
-  const visit = (task: Task) => {
-    if (stack.has(task.id)) {
-      issues.push({
-        taskId: task.id,
-        field: 'dependency',
-        message: '存在依赖环，请检查依赖关系。',
-        severity: 'error'
-      });
-      return;
-    }
-    if (visited.has(task.id)) return;
-    visited.add(task.id);
-    stack.add(task.id);
-    for (const depId of task.dependencyIds) {
-      const dep = tasks.find((t) => t.id === depId);
-      if (dep) {
-        visit(dep);
-      }
-    }
-    stack.delete(task.id);
-  };
-  tasks.forEach(visit);
-  return issues;
-};
-
 export const detectValidationIssues = (
   tasks: Task[],
-  settings: ProjectSettings
+  settings: ProjectSettings,
+  usageLogs: UsageLog[]
 ): ValidationIssue[] => {
   const issues: ValidationIssue[] = [];
-  const idSet = new Set<string>();
-  const seenIds = new Set<string>();
+  const today = todayIso();
 
-  for (const task of tasks) {
-    if (seenIds.has(task.id)) {
-      issues.push({
-        taskId: task.id,
-        field: 'id',
-        message: 'ID 必须唯一。',
-        severity: 'error'
-      });
-    }
-    seenIds.add(task.id);
-    idSet.add(task.id);
+  tasks.forEach((task) => {
     const start = ensureDate(task.startDate);
     const end = ensureDate(task.endDate);
 
-    if (isBefore(end, start)) {
+    if (end < start) {
       issues.push({
+        code: 'T001',
         taskId: task.id,
         field: 'endDate',
-        message: '结束日期不得早于开始日期。',
+        message: '结束时间不得早于开始时间',
         severity: 'error'
       });
     }
 
-    if (task.isMilestone && !isEqual(start, end)) {
+    if (task.type === 'milestone' && task.startDate !== task.endDate) {
       issues.push({
+        code: 'T001',
         taskId: task.id,
         field: 'endDate',
-        message: '里程碑需零工期（开始=结束）。',
+        message: '里程碑须保持零工期：开始=结束',
         severity: 'error'
       });
     }
 
-    if (task.isMilestone && settings.disableWeekendMilestones && isWeekend(start)) {
+    if (task.type === 'milestone' && settings.disableWeekendMilestones && isWeekend(start)) {
       issues.push({
+        code: 'T002',
         taskId: task.id,
         field: 'startDate',
-        message: '里程碑不可落在周末，请调整日期。',
-        severity: 'error'
+        message: '里程碑位于周末，可顺延到下一个工作日',
+        severity: 'warning',
+        fix: {
+          label: '顺延到周一',
+          action: 'shiftWeekendMilestone',
+          payload: {
+            taskId: task.id,
+            suggestedDate: nextBusinessDay(task.startDate)
+          }
+        }
       });
     }
 
-    for (const depId of task.dependencyIds) {
-      if (!idSet.has(depId) && !tasks.some((t) => t.id === depId)) {
-        issues.push({
-          taskId: task.id,
-          field: 'dependency',
-          message: `依赖 ID ${depId} 不存在。`,
-          severity: 'error'
-        });
-      }
-      if (depId === task.id) {
-        issues.push({
-          taskId: task.id,
-          field: 'dependency',
-          message: '不可自引用依赖。',
-          severity: 'error'
-        });
-      }
-    }
-
-    if (task.budget < 0 || task.subscriptionMonthly < 0) {
+    if (!task.baselineStart || !task.baselineEnd) {
       issues.push({
+        code: 'T001',
         taskId: task.id,
-        field: 'budget',
-        message: '预算与订阅费用需为非负。',
-        severity: 'error'
+        field: 'baselineStart',
+        message: '建议为任务设置基线以便对比偏差',
+        severity: 'info'
       });
     }
-    if (task.apiExpected < 0 || task.apiActual < 0) {
+
+    if (task.type === 'task' && today > task.endDate && task.status !== 'completed') {
       issues.push({
+        code: 'T001',
         taskId: task.id,
-        field: 'apiExpected',
-        message: 'API 用量需为非负。',
-        severity: 'error'
+        field: 'endDate',
+        message: '任务已过期但尚未完成，建议跟进进度',
+        severity: 'warning'
       });
     }
-    if (task.actualHours < 0 || task.estimatedHours < 0) {
-      issues.push({
-        taskId: task.id,
-        field: 'estimatedHours',
-        message: '工时需为非负。',
-        severity: 'error'
-      });
-    }
-  }
-
-  for (const task of tasks) {
-    const start = ensureDate(task.startDate);
-    for (const depId of task.dependencyIds) {
-      const dep = tasks.find((t) => t.id === depId);
-      if (!dep) continue;
-      const depEnd = ensureDate(dep.endDate);
-      if (isBefore(start, depEnd)) {
-        issues.push({
-          taskId: task.id,
-          field: 'startDate',
-          message: `开始日期需晚于依赖 ${dep.id} 的结束日期。`,
-          severity: 'error'
-        });
-      }
-    }
-  }
-
-  if (!isDependencyValid(tasks)) {
-    issues.push(...collectDependencyCycles(tasks));
-  }
-
-  const resourceMap = deriveResourceMap(tasks, settings);
-  resourceMap.overAllocated.forEach((row) => {
-    issues.push({
-      taskId: row.taskId,
-      field: 'owner',
-      message: `${row.owner} 在 ${row.date} 超配 ${row.overBy.toFixed(1)} 小时。`,
-      severity: settings.strictOverAllocation ? 'error' : 'warning'
-    });
   });
+
+  const budgetTotal = tasks.reduce((sum, task) => sum + task.budget, 0);
+  if (budgetTotal > 0) {
+    const currentMonth = today.slice(0, 7);
+    const actual = usageLogs
+      .filter((log) => log.date.startsWith(currentMonth))
+      .reduce((sum, log) => sum + (typeof log.cost === 'number' ? log.cost : log.spent), 0);
+    const ratio = actual / budgetTotal;
+    if (ratio >= settings.budgetThresholdCritical) {
+      issues.push({
+        code: 'B001',
+        taskId: 'PROJECT',
+        field: 'budget',
+        message: `本月消耗已达到预算的 ${(ratio * 100).toFixed(0)}%`,
+        severity: 'error'
+      });
+    } else if (ratio >= settings.budgetThresholdWarning) {
+      issues.push({
+        code: 'B001',
+        taskId: 'PROJECT',
+        field: 'budget',
+        message: `本月消耗已使用 ${(ratio * 100).toFixed(0)}%，接近预算阈值`,
+        severity: 'warning'
+      });
+    }
+  }
 
   return issues;
 };
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
-export const buildCostLines = (
-  tasks: Task[],
-  settings: ProjectSettings
-): CostLine[] => {
+export const buildCostLines = (tasks: Task[], settings: ProjectSettings): CostLine[] => {
   const lines: CostLine[] = [];
   const push = (dimension: CostLine['dimension'], key: string, items: Task[]) => {
     const totalBudget = items.reduce((sum, task) => sum + task.budget, 0);
@@ -307,7 +213,6 @@ export const deriveResourceMap = (
   return { matrix, owners, dates, overAllocated };
 };
 
-export const filterTasks = (tasks: Task[], filters: Partial<ProjectSettings>) => {
-  // Placeholder if needed for future global filters.
+export const filterTasks = (tasks: Task[], _filters: Partial<ProjectSettings>) => {
   return tasks;
 };

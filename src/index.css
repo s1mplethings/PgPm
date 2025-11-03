@@ -12,3 +12,11 @@ body {
   @apply bg-slate-50 text-slate-900;
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
+
+.ag-cell-error {
+  background-color: rgba(248, 113, 113, 0.12);
+}
+
+.ag-cell-warning {
+  background-color: rgba(250, 204, 21, 0.12);
+}
