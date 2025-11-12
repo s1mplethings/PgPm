@@ -1,52 +1,73 @@
-# 项目面板原型（Excel + 甘特联动）
+# React + TypeScript + Vite
 
-基于 React + TypeScript + Vite 实现的一体化项目计划与预算面板，覆盖甘特拖拽、任务表批量编辑、消耗与资源视图，以及规则校验。针对“像 Excel + Teambition”体验的交互与信息架构进行端到端落地。
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## 功能概览
+Currently, two official plugins are available:
 
-- **甘特视图**：自定义任务/里程碑条、依赖高亮、基线对比、拖拽吸附与周末限制提示。
-- **任务表（Excel 风）**：AG Grid 支持冻结列、批量编辑、剪贴板、下拉选择、依赖/数值校验与校验中心红黄提示。
-- **消耗视图**：KPI 卡 + 维度切换明细表，内建预算阈值预警、燃尽预测。
-- **资源负载热图**：负责人 × 日期热力单元格，超配标红，点击查看当天任务并预留自动平衡入口。
-- **仪表盘**：里程碑、风险、燃尽等汇总组件，补齐决策视角。
-- **全局规则**：时间依赖、周末限制、ID 唯一、非负数值、资源上限等均通过校验中心同步展示。
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-## 技术栈
+## React Compiler
 
-- React 18 + TypeScript + Vite
-- Zustand 状态管理
-- TailwindCSS + 自定义设计规范
-- shadcn 风格控件（原子实现，无直接依赖）
-- AG Grid Community（任务表）
-- gantt-task-react（甘特）
-- Recharts（预留趋势图使用）
-- date-fns（时间处理）、zod（后续可扩展校验）、nanoid（ID 生成）
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-## 本地运行
+## Expanding the ESLint configuration
 
-```bash
-# 安装依赖
-npm install
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-# 启动开发服务器
-npm run dev
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
-# 构建产物
-npm run build
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
+
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 ```
 
-> 若本地未安装 npm，可使用 pnpm / yarn，或手动下载依赖。
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
-## 交互要点
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
 
-- 甘特拖拽会实时校验依赖顺序与周末里程碑限制，若冲突将阻止并提示。
-- 任务表同一任务的校验结果会同步到右侧“校验中心”，支持管理员快速定位。
-- 消耗视图预留 80% / 100% 阈值预警，符合预算超限申请流程。
-- 资源热图采用工作日自动均摊工时，严格模式下可进一步阻断超配。
-
-## 下一步建议
-
-1. 接入 react-flow 渲染依赖箭头和关键路径高亮层。
-2. 完成 CSV/Excel 导入器，提供逐行校验修复流程。
-3. 打通后端 API（tasks/members/settings/usage_logs），实现多人协作与权限控制。
-4. 引入 zod + form 层封装，统一表单/表格的同步校验与提示文案。
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
