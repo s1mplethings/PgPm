@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import './app.css';
 import type { Task, Settings } from './core/types';
 import { demoSettings } from './core/sampleData';
 import { demoV04Tasks } from './core/sampleData_v04';
 import { recommend } from './core/recommend';
 import { readJSON, writeJSON } from './lib/fs';
-import QuickAdd from './features/quickadd/QuickAdd';
+import InputPage from './features/input/InputPage';
+import { repo } from './infra/repoFactory';
 
 type Mode = Settings['mode'];
 type Pane = 'input' | 'display';
@@ -27,21 +28,23 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(demoSettings);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [active, setActive] = useState<string[]>([]);
-  const [focus, setFocus] = useState<Task | null>(null);
-  const [qaOpen, setQaOpen] = useState(false);
   const [pane, setPane] = useState<Pane>('input');
 
   useEffect(() => {
     (async () => {
-      const loadedSettings = await readJSON<Settings>('settings.json', demoSettings);
-      const snapshot = await readJSON<{ version: number; tasks: Task[] }>('tasks.json', {
-        version: 1,
-        tasks: []
-      });
-      setSettings(loadedSettings);
-      setTasks(snapshot.tasks || []);
+      const loaded = await readJSON<Settings>('settings.json', demoSettings);
+      setSettings(loaded);
     })();
   }, []);
+
+  const refreshTasks = useCallback(async () => {
+    const list = await repo.list();
+    setTasks(list);
+  }, []);
+
+  useEffect(() => {
+    refreshTasks();
+  }, [refreshTasks]);
 
   const rec = useMemo(() => recommend(tasks, settings, active), [tasks, settings, active]);
 
@@ -51,110 +54,42 @@ export default function App() {
     await writeJSON('settings.json', next);
   };
 
-  const saveTasks = async (arr: Task[]) => {
-    setTasks(arr);
-    await writeJSON('tasks.json', { version: 1, tasks: arr });
-  };
-
   const appendEvent = async (payload: { task_id: string; action: 'accept' | 'skip' }) => {
-    const events = await readJSON<{ ts: string; task_id: string; action: string }[]>(
-      'events.json',
-      []
-    );
+    const events = await readJSON<{ ts: string; task_id: string; action: string }[]>('events.json', []);
     events.push({ ts: new Date().toISOString(), ...payload });
     await writeJSON('events.json', events);
   };
 
-  const accept = async (t: Task | null) => {
-    if (!t) return;
-    setActive([t.id]);
-    setFocus(t);
-    await appendEvent({ task_id: t.id, action: 'accept' });
+  const accept = async (task: Task | null) => {
+    if (!task) return;
+    setActive([task.id]);
+    await appendEvent({ task_id: task.id, action: 'accept' });
   };
 
-  const skip = async (t: Task | null) => {
-    if (!t) return;
-    await appendEvent({ task_id: t.id, action: 'skip' });
+  const skip = async (task: Task | null) => {
+    if (!task) return;
+    await appendEvent({ task_id: task.id, action: 'skip' });
   };
 
   const importV04 = async () => {
     const arr = demoV04Tasks();
-    await saveTasks(arr);
+    await repo.saveAll(arr);
     setActive([]);
-    setFocus(null);
+    refreshTasks();
   };
 
   const clearAll = async () => {
-    await saveTasks([]);
+    await repo.saveAll([]);
     setActive([]);
-    setFocus(null);
+    refreshTasks();
   };
 
-  const columns = settings.columns ?? ['Now', 'Next', 'Later', 'Blocked', 'Done'];
+  const columns = settings.columns ?? ['Inbox', 'Now', 'Next', 'Later', 'Blocked', 'Done'];
 
   const renderInputPane = () => (
-    <>
-      <div className="topbar">
-        <div className="h1">输入中心</div>
-        <div className="kit" style={{ gap: 12 }}>
-          <button className="btn brand" onClick={() => setQaOpen(true)}>
-            打开自然语言弹窗
-          </button>
-        </div>
-      </div>
-
-      <div className="section card">
-        <div className="h2">自然语言快速添加</div>
-        <div className="sub" style={{ marginTop: 4 }}>
-          输入一行描述（时间、优先级、负责人、预算等），自动解析为任务。
-        </div>
-        <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn brand" onClick={() => setQaOpen(true)}>
-            立即输入
-          </button>
-          <button className="btn" onClick={importV04}>
-            导入 v0.4 示例数据
-          </button>
-          <button className="btn" onClick={clearAll}>
-            清空全部
-          </button>
-        </div>
-        <div className="sub" style={{ marginTop: 8 }}>
-          示例：明天 14:00-16:00 写接口文档 2h P0 @你 ¥20 10kapi Now
-        </div>
-      </div>
-
-      <div className="section card" style={{ marginTop: 12 }}>
-        <div className="h2">当前任务概览</div>
-        <div style={{ marginTop: 8 }}>
-          {tasks.length === 0 ? (
-            <div className="empty">暂无任务，可通过左上按钮导入或创建。</div>
-          ) : (
-            <ul style={{ margin: 0, paddingLeft: 18 }}>
-              {tasks.slice(0, 5).map((task) => (
-                <li key={task.id} style={{ marginBottom: 4 }}>
-                  {task.title} · {task.status} · Due {task.due}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      <div className="section card" style={{ marginTop: 12 }}>
-        <div className="h2" style={{ fontSize: 16 }}>
-          测试工具
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          <button className="btn brand" onClick={importV04}>
-            导入 v0.4 示例数据
-          </button>
-          <button className="btn" onClick={clearAll}>
-            清空
-          </button>
-        </div>
-      </div>
-    </>
+    <div className="section card" style={{ background: 'transparent', boxShadow: 'none', border: 'none', padding: 0 }}>
+      <InputPage onChanged={refreshTasks} />
+    </div>
   );
 
   const renderDisplayPane = () => (
@@ -162,9 +97,6 @@ export default function App() {
       <div className="topbar">
         <div className="h1">项目 · 任务板（NLP 输入）</div>
         <div className="kit" style={{ gap: 12 }}>
-          <button className="btn brand" onClick={() => setQaOpen(true)}>
-            快速添加
-          </button>
           <div className="pills">
             <div className={`pill ${settings.mode === 'rule' ? 'active' : ''}`} onClick={() => setMode('rule')}>
               Auto
@@ -240,7 +172,7 @@ export default function App() {
       </div>
       <div className="grid-5" style={{ marginTop: 8 }}>
         {columns.map((col) => {
-          const list = tasks.filter((t) => t.status === col);
+          const list = tasks.filter((task) => task.status === col);
           return (
             <div key={col} className="column card">
               <div className="head">
@@ -248,18 +180,18 @@ export default function App() {
                 <span className="sub">{list.length}</span>
               </div>
               <div className="list">
-                {list.slice(0, 6).map((t) => (
-                  <div key={t.id} className="item">
-                    <div className="ttl">{t.title}</div>
-                    <div className="meta">Due {t.due}</div>
+                {list.slice(0, 6).map((task) => (
+                  <div key={task.id} className="item">
+                    <div className="ttl">{task.title}</div>
+                    <div className="meta">Due {task.due}</div>
                     <div style={{ marginTop: 6 }}>
-                      <Progress value={t.progress ?? 0} />
+                      <Progress value={task.progress ?? 0} />
                     </div>
                     <div className="badges" style={{ marginTop: 8 }}>
-                      <Badge>{t.hours ?? 0}h</Badge>
-                      <Badge>{t.api ?? 0}k API</Badge>
-                      <Badge>¥{t.cost ?? 0}</Badge>
-                      <Badge tone="brand">{t.priority}</Badge>
+                      <Badge>{task.hours ?? 0}h</Badge>
+                      <Badge>{task.api ?? 0}k API</Badge>
+                      <Badge>¥{task.cost ?? 0}</Badge>
+                      <Badge tone="brand">{task.priority}</Badge>
                     </div>
                   </div>
                 ))}
@@ -267,6 +199,20 @@ export default function App() {
             </div>
           );
         })}
+      </div>
+
+      <div className="section card" style={{ marginTop: 12 }}>
+        <div className="h2" style={{ fontSize: 16 }}>
+          测试工具
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          <button className="btn brand" onClick={importV04}>
+            导入 v0.4 示例数据
+          </button>
+          <button className="btn" onClick={clearAll}>
+            清空
+          </button>
+        </div>
       </div>
     </>
   );
@@ -287,15 +233,6 @@ export default function App() {
           <div className="container">{pane === 'input' ? renderInputPane() : renderDisplayPane()}</div>
         </main>
       </div>
-
-      <QuickAdd
-        open={qaOpen}
-        onClose={() => setQaOpen(false)}
-        onSave={async (task) => {
-          await saveTasks([task, ...tasks]);
-          setQaOpen(false);
-        }}
-      />
     </div>
   );
 }

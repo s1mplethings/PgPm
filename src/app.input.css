@@ -1,0 +1,8 @@
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 6px 24px rgba(2,6,23,.06)}
+.section{padding:16px;border-radius:12px}
+.sub{color:#6b7280;font-size:12px}
+.btn{height:32px;padding:0 14px;border-radius:10px;border:1px solid #e5e7eb;background:#f3f4f6;font-weight:600;cursor:pointer}
+.btn.brand{background:#2563eb;border-color:#2563eb;color:#fff}
+input,select,textarea{border:1px solid #e5e7eb;border-radius:10px;padding:8px;background:#fff}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#c7d2fe;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+.item{background:#fff;border:1px solid #e5e7eb;border-radius:10px}
