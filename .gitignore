@@ -7,16 +7,45 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies and build output
 node_modules
 dist
 dist-ssr
 *.local
+
+# Local secrets and env files
+.env
+.env.*
+!.env.example
+openai.env
+secrets/
+private/
+.agent_private/
+*.key
+*.pem
+*.p12
+*.pfx
+*.secret
+*.credentials
+*.token
+*_token.txt
+.npmrc
+.netrc
+
+# Local databases / caches
+*.db
+*.sqlite
+*.sqlite3
+.cache/
+.tmp/
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
+Desktop.ini
 *.suo
 *.ntvs*
 *.njsproj
